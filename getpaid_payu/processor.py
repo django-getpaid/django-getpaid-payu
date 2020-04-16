@@ -130,6 +130,9 @@ class PaymentProcessor(BaseProcessor):
             )
         return context
 
+    def get_paywall_method(self):
+        return self.get_setting("paywall_method", self.method)
+
     # Communication with paywall
 
     @atomic()
