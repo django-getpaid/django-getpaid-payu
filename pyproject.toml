@@ -13,7 +13,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.6"
-django-getpaid = "^2.0.0-rc.7"
+django-getpaid = "^2.0.0"
 requests = "^2.23.0"
 swapper = "^1.1.2"
 

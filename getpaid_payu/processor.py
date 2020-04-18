@@ -119,7 +119,7 @@ class PaymentProcessor(BaseProcessor):
             "extOrderId": self.payment.get_unique_id(),
             "customerIp": loc if not request else request.META.get("REMOTE_ADDR", loc),
             "merchantPosId": self.get_setting("pos_id"),
-            "description": self.get_setting("site_description"),
+            "description": self.payment.description,
             "currencyCode": self.payment.currency,
             "totalAmount": self.payment.amount_required * 100,
             "products": products,
@@ -140,7 +140,7 @@ class PaymentProcessor(BaseProcessor):
         method = self.get_paywall_method().upper()
         if method == "REST":
             try:
-                results = self.payment.prepare_lock(request=request, **kwargs)
+                results = self.prepare_lock(request=request, **kwargs)
                 response = http.HttpResponseRedirect(results["url"])
             except LockFailure as exc:
                 logger.error(exc, extra=getattr(exc, "context", None))
@@ -193,7 +193,7 @@ class PaymentProcessor(BaseProcessor):
                                 "payment_status": self.payment.status,
                             },
                         )
-                elif status in ["CANCELLED", "CANCELED"]:
+                elif status == "CANCELED":
                     self.payment.fail()
                 elif status == "WAITING_FOR_CONFIRMATION":
                     if can_proceed(self.payment.confirm_lock):
@@ -219,6 +219,11 @@ class PaymentProcessor(BaseProcessor):
                     if can_proceed(self.payment.mark_as_paid):
                         self.payment.mark_as_paid()
             self.payment.save()
+        else:
+            logger.error(
+                f"Received bad signature for payment {self.payment.id}! "
+                f"Got '{signature}', expected '{expected_signature}'"
+            )
 
     def fetch_payment_status(self):
         base_url = self.get_paywall_baseurl()
@@ -251,9 +256,8 @@ class PaymentProcessor(BaseProcessor):
         )
         if response.status_code in self.ok_statuses:
             resp_data = response.json()
-            results["url"] = resp_data.get("redirectUri") or reverse(
-                "getpaid:payment-success", kwargs={"pk": self.payment.pk}
-            )
+            results["url"] = resp_data.get("redirectUri")
+            self.payment.confirm_prepared()
             self.payment.external_id = results["ext_order_id"] = resp_data.get(
                 "orderId", ""
             )
