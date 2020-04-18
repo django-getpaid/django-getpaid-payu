@@ -6,14 +6,13 @@ Django-getpaid plugin for PayU service.
 
 .. note::
 
-    This is Alpha-quality software. You are more than welcome to `send PRs<https://github.com/django-getpaid/django-getpaid-payu>`_
+    This is Alpha-quality software. You are more than welcome to `send PRs <https://github.com/django-getpaid/django-getpaid-payu>`_
     with fixes and new features.
 
 Installation
 ============
 
-First make sure that `django-getpaid`_ is installed and configured.
-.. _django-getpaid:https://django-getpaid.readthedocs.io/
+First make sure that `django-getpaid <https://django-getpaid.readthedocs.io/>`_ is installed and configured.
 
 .. code-block:: shell
 
@@ -64,7 +63,7 @@ confirmation_method
 ~~~~~~~~~~~~~~~~~~~
 
 * PUSH - paywall will send status updates to the callback endpoint hence updating status automatically
-* PULL - each :class:`~getpaid.models.Payment` has to be verified by calling :meth:`~getpaid.models.Payment.fetch_and_update_status`, eg. from a Celery task.
+* PULL - each Payment has to be verified by calling its ``fetch_and_update_status()``, eg. from a Celery task.
 
 Default: PUSH
 
@@ -83,4 +82,4 @@ MIT
 Authors
 =======
 
-`Dominik Kozaczko<https://github.com/dekoza/>`_
+`Dominik Kozaczko <https://github.com/dekoza/>`_
