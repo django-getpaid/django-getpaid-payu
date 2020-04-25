@@ -1,5 +1,5 @@
-from .processor import PaymentProcessor  # noqa
+# from .processor import PaymentProcessor  # noqa
 
-default_app_config = "getpaid_payu.apps.GetpaidPaynowAppConfig"
+default_app_config = "getpaid_payu.apps.GetpaidPayUAppConfig"
 
-__version__ = "0.1.2"
+__version__ = "0.2.0-pre.1"

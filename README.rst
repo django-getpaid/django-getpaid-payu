@@ -41,8 +41,8 @@ Add ``"getpaid_payu"`` to your ``INSTALLED_APPS`` and add plugin configuration.
             # take these from your merchant panel:
             "pos_id": 12345,
             "second_key": "91ae651578c5b5aa93f2d38a9be8ce11",
-            "client_id": 12345,
-            "client_secret": "12f071174cb7eb79d4aac5bc2f07563f",
+            "oauth_id": 12345,
+            "oauth_secret": "12f071174cb7eb79d4aac5bc2f07563f",
         },
         # ...
     }

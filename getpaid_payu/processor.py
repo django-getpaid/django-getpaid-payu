@@ -11,18 +11,19 @@ import logging
 from collections import OrderedDict
 from urllib.parse import urljoin
 
-import pendulum
 import requests
 from django import http
 from django.db.transaction import atomic
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.http import urlencode
-from django.utils.timezone import now
 from django_fsm import can_proceed
 from getpaid.exceptions import LockFailure
 from getpaid.post_forms import PaymentHiddenInputsPostForm
 from getpaid.processor import BaseProcessor
+
+from .client import Client
+from .types import Currency, OrderStatus, ResponseStatus
 
 logger = logging.getLogger(__name__)
 
@@ -30,34 +31,28 @@ logger = logging.getLogger(__name__)
 class PaymentProcessor(BaseProcessor):
     slug = "payu"
     display_name = "PayU"
-    accepted_currencies = [
-        "BGN",
-        "CHF",
-        "CZK",
-        "DKK",
-        "EUR",
-        "GBP",
-        "HRK",
-        "HUF",
-        "NOK",
-        "PLN",
-        "RON",
-        "RUB",
-        "SEK",
-        "UAH",
-        "USD",
-    ]
+    accepted_currencies = [c.value for c in Currency]
     ok_statuses = [200, 201, 302]
     method = "REST"  #: Supported modes: REST, POST (not recommended!)
-    sandbox_url = "https://secure.snd.payu.com/api/v2_1/"
-    production_url = "https://secure.payu.com/api/v2_1/"
+    sandbox_url = "https://secure.snd.payu.com/"
+    production_url = "https://secure.payu.com/"
     confirmation_method = "PUSH"  #: PUSH - paywall will send POST request to your server; PULL - you need to check the payment status
     post_form_class = PaymentHiddenInputsPostForm
     post_template_name = "getpaid_payu/payment_post_form.html"
+    client_class = Client
     _token = None
     _token_expires = None
 
     # Specifics
+
+    def get_client_params(self) -> dict:
+        return {
+            "api_url": self.get_paywall_baseurl(),
+            "pos_id": self.get_setting("pod_id"),
+            "second_key": self.get_setting("second_key"),
+            "oauth_id": self.get_setting("oauth_id"),
+            "oauth_secret": self.get_setting("oauth_secret"),
+        }
 
     def prepare_form_data(self, post_data):
         pos_id = self.get_setting("pos_id")
@@ -74,33 +69,12 @@ class PaymentProcessor(BaseProcessor):
 
     # Helper methods
 
-    def get_oauth_token(self):
-        dt = pendulum.instance(now())
-        if self._token is None or self._token_expires <= dt.add(seconds=-20):
-            base_url = self.get_paywall_baseurl()
-            url = urljoin(base_url, "/pl/standard/user/oauth/authorize")
-            data = {
-                "grant_type": "client_credentials",
-                "client_id": self.get_setting("client_id"),
-                "client_secret": self.get_setting("client_secret"),
-            }
-            response = requests.post(url, data=urlencode(data))
-            resp_data = response.json()
-            token_type = resp_data.get("token_type", "bearer").capitalize()
-            token = resp_data.get("access_token")
-            self._token = f"{token_type} {token}"
-            self._token_expires = dt.add(seconds=resp_data.get("expires_in"))
-        return self._token
-
-    def prepare_paywall_headers(self):
-        return {"Authorization": self.get_oauth_token()}
-
-    def get_paywall_context(self, request=None, **kwargs):
+    def get_paywall_context(self, request=None, camelize_keys=False, **kwargs):
         # TODO: configurable buyer info inclusion
         """
         "buyer" is optional
         :param request: request creating the payment
-        :return: dict with params accepted by paywall
+        :return: dict that unpacked will be accepted by :meth:`Client.new_order`
         """
         loc = "127.0.0.1"
         our_baseurl = self.get_our_baseurl(request)
@@ -108,26 +82,26 @@ class PaymentProcessor(BaseProcessor):
             "unit_price": "unitPrice",
             "first_name": "firstName",
             "last_name": "lastName",
+            "order_id": "extOrderId",
+            "customer_ip": "customerIp",
+            "notify_url": "notifyUrl",
         }
         raw_products = self.payment.get_items()
-        for product in raw_products.values():
-            if "unit_price" in product:
-                product["unit_price"] *= 100
-
         products = {key_trans.get(k, k): v for k, v in raw_products.items()}
         context = {
-            "extOrderId": self.payment.get_unique_id(),
-            "customerIp": loc if not request else request.META.get("REMOTE_ADDR", loc),
-            "merchantPosId": self.get_setting("pos_id"),
+            "order_id": self.payment.get_unique_id(),
+            "customer_ip": loc if not request else request.META.get("REMOTE_ADDR", loc),
             "description": self.payment.description,
-            "currencyCode": self.payment.currency,
-            "totalAmount": self.payment.amount_required * 100,
+            "currency": self.payment.currency,
+            "amount": self.payment.amount_required,
             "products": products,
         }
         if self.get_setting("confirmation_method", self.confirmation_method) == "PUSH":
-            context["notifyUrl"] = urljoin(
+            context["notify_url"] = urljoin(
                 our_baseurl, reverse("getpaid:callback", kwargs={"pk": self.payment.pk})
             )
+        if camelize_keys:
+            return {key_trans.get(k, k): v for k, v in context.items()}
         return context
 
     def get_paywall_method(self):
@@ -151,7 +125,10 @@ class PaymentProcessor(BaseProcessor):
             self.payment.save()
             return response
         elif method == "POST":
-            data = self.get_paywall_context(request=request, **kwargs)
+            data = self.get_paywall_context(
+                request=request, camelize_keys=True, **kwargs
+            )
+            data["merchantPosId"] = self.get_setting("pos_id")
             url = self.get_main_url()
             form = self.get_form(data)
             return TemplateResponse(
@@ -226,72 +203,50 @@ class PaymentProcessor(BaseProcessor):
             )
 
     def fetch_payment_status(self):
-        base_url = self.get_paywall_baseurl()
-        url = urljoin(base_url, f"orders/{self.payment.external_id}")
-        headers = self.prepare_paywall_headers()
-        response = requests.get(url, headers=headers)
-        results = {"raw_response": response}
-        if response.status_code == 200:
-            data = response.json()
-            status = data.get("status", {}).get("statusCode")
-            if status == "SUCCESS":
-                results["callback"] = "confirm_payment"
-            elif status == "WAITING_FOR_CONFIRMATION":
-                results["callback"] = "confirm_lock"
-            elif status == "PENDING":
-                results["callback"] = "confirm_prepared"
+        response = self.client.get_order_info(self.payment.external_id)
+        results = {"raw_response": self.client.last_response}
+        order_data = response.get("orders", [None])[0]
+
+        status = order_data.get("status")
+        if status == OrderStatus.NEW:
+            results["callback"] = "confirm_prepared"
+        elif status == OrderStatus.PENDING:
+            results["callback"] = "confirm_prepared"
+        elif status == OrderStatus.CANCELED:
+            results["callback"] = "fail"
+        elif status == OrderStatus.COMPLETED:
+            results["callback"] = "confirm_payment"
+        elif status == OrderStatus.WAITING_FOR_CONFIRMATION:
+            results["callback"] = "confirm_lock"
         return results
 
     def get_main_url(self, data=None):
         baseurl = self.get_paywall_baseurl()
-        return urljoin(baseurl, "orders")
+        return urljoin(baseurl, "/api/v2_1/orders")
 
     def prepare_lock(self, request=None, **kwargs):
         results = {}
-        api_url = self.get_main_url()
-        headers = self.prepare_paywall_headers()
-        context = self.get_paywall_context(request=request, **kwargs)
-        response = results["raw_response"] = requests.post(
-            api_url, data=context, headers=headers
-        )
-        if response.status_code in self.ok_statuses:
-            resp_data = response.json()
-            results["url"] = resp_data.get("redirectUri")
-            self.payment.confirm_prepared()
-            self.payment.external_id = results["ext_order_id"] = resp_data.get(
-                "orderId", ""
-            )
-        else:
-            raise LockFailure(
-                "Unable to prepare payment pre-auth.",
-                context={
-                    "api_url": api_url,
-                    "headers": headers,
-                    "context": context,
-                    "response": response,
-                },
-            )
+        params = self.get_paywall_context(request=request, **kwargs)
+        response = self.client.new_order(**params)
+        results["raw_response"] = self.client.last_response
+        results["url"] = response.get("redirectUri")
+        self.payment.confirm_prepared()
+        self.payment.external_id = results["ext_order_id"] = response.get("orderId", "")
         return results
 
     def charge(self, **kwargs):
-        url = urljoin(self.get_main_url(), f"{self.payment.external_id}/status")
-        headers = self.prepare_paywall_headers()
-        data = {"orderId": self.payment.external_id, "orderStatus": "COMPLETED"}
-        response = requests.put(url, headers=headers, json=data)
-        result = {"raw_response": response}
-        if response.status_code == 200:
-            data = response.json()
-            result["status_desc"] = data.get("status", {}).get("statusDesc")
-            if data.get("status", {}).get("statusCode") == "SUCCESS":
-                result["success"] = True
+        response = self.client.capture(self.payment.external_id)
+        result = {
+            "raw_response": self.client.last_response,
+            "status_desc": response.get("status", {}).get("statusDesc"),
+        }
+        if response.get("status", {}).get("statusCode") == ResponseStatus.SUCCESS:
+            result["success"] = True
+
         return result
 
     def release_lock(self):
-        base_url = self.get_paywall_baseurl()
-        payu_id = self.payment.external_id
-        url = urljoin(base_url, f"orders/{payu_id}")
-        headers = self.prepare_paywall_headers()
-        response = requests.delete(url, headers=headers)
-        status = response.json().get("status", {}).get("statusCode")
-        if status == "SUCCESS":
+        response = self.client.cancel_order(self.payment.external_id)
+        status = response.get("status", {}).get("statusCode")
+        if status == ResponseStatus.SUCCESS:
             return self.payment.amount_locked

@@ -1,11 +1,11 @@
 [tool.poetry]
 name = "django-getpaid-payu"
-version = "0.1.0"
+version = "0.2.0-pre.1"
 description = "Django-GetPaid plugin for PayU service."
 authors = ["Dominik Kozaczko <dominik@kozaczko.info>"]
 license = "MIT"
 readme = "README.rst"
-repository = "https://github.com/django-getpaid/django-getpaid-paynow"
+repository = "https://github.com/django-getpaid/django-getpaid-payu"
 packages = [
     { include = "getpaid_payu" }
 ]
@@ -16,6 +16,7 @@ python = "^3.6"
 django-getpaid = "^2.0.0"
 requests = "^2.23.0"
 swapper = "^1.1.2"
+typing-extensions = "^3.7.4"
 
 
 [tool.poetry.dev-dependencies]
@@ -67,10 +68,10 @@ exclude = '''
 
 [tool.isort]
 multi_line_output = 3
-include_trailing_comma = false
+include_trailing_comma = true
 line_length = 88
 known_first_party = ["getpaid_payu"]
-known_third_party = ["django", "django_fsm", "getpaid", "pendulum", "requests", "swapper"]
+known_third_party = ["django", "django_fsm", "factory", "getpaid", "orders", "paywall", "pendulum", "pytest", "pytest_factoryboy", "requests", "swapper", "typing_extensions"]
 
 
 [build-system]
