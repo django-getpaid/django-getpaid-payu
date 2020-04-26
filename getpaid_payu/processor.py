@@ -220,7 +220,7 @@ class PaymentProcessor(BaseProcessor):
             results["callback"] = "confirm_lock"
         return results
 
-    def get_main_url(self, data=None):
+    def get_main_url(self, data=None) -> str:
         baseurl = self.get_paywall_baseurl()
         return urljoin(baseurl, "/api/v2_1/orders")
 

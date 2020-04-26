@@ -28,6 +28,16 @@ from .types import (
 )
 
 
+def ensure_auth(func: Callable) -> Callable:
+    @wraps(func)
+    def _f(self, *args, **kwargs):
+        if self.token_expiration < pendulum.now().add(seconds=-5):
+            self._authorize()
+        return func(self, *args, **kwargs)
+
+    return _f
+
+
 class Client:
     last_response = None
 
@@ -92,15 +102,6 @@ class Client:
         elif isinstance(data, list):
             return [cls._normalize(v) for v in data]
         return data
-
-    def ensure_auth(self, func: Callable) -> Callable:
-        @wraps(func)
-        def _f(*args, **kwargs):
-            if self.token_expiration < pendulum.now().add(seconds=-3):
-                self._authorize()
-            return func(*args, **kwargs)
-
-        return _f
 
     @ensure_auth
     def new_order(
