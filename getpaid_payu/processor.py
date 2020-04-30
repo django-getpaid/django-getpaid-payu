@@ -47,6 +47,11 @@ class PaymentProcessor(BaseProcessor):
 
     # Specifics
 
+    def get_our_baseurl(self, request=None):
+        if request is None:
+            return "http://127.0.0.1/"
+        return super().get_our_baseurl(request)
+
     def get_client_params(self) -> dict:
         return {
             "api_url": self.get_paywall_baseurl(),
@@ -144,8 +149,9 @@ class PaymentProcessor(BaseProcessor):
 
     def handle_paywall_callback(self, request, **kwargs):
         payu_header_raw = request.headers.get(
-            "OpenPayU-Signature"
-        ) or request.headers.get("X-OpenPayU-Signature", "")
+            "Openpayu-Signature"
+        ) or request.headers.get("X-Openpayu-Signature", "")
+
         if not payu_header_raw:
             return HttpResponse("NO SIGNATURE", status=400)
         payu_header = {
@@ -156,12 +162,14 @@ class PaymentProcessor(BaseProcessor):
         second_key = self.get_setting("second_key")
         algorithm = getattr(hashlib, algo_name.replace("-", "").lower())
 
+        body = request.body.decode()
+
         expected_signature = algorithm(
-            f"{request.body}{second_key}".encode("utf-8")
+            f"{body}{second_key}".encode("utf-8")
         ).hexdigest()
 
         if expected_signature == signature:
-            data = json.loads(request.body)
+            data = json.loads(body)
 
             if "order" in data:
                 order_data = data.get("order")
@@ -169,6 +177,8 @@ class PaymentProcessor(BaseProcessor):
                 if status == OrderStatus.COMPLETED:
                     if can_proceed(self.payment.confirm_payment):
                         self.payment.confirm_payment()
+                        if can_proceed(self.payment.mark_as_paid):
+                            self.payment.mark_as_paid()
                     else:
                         logger.debug(
                             "Cannot confirm payment",

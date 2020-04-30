@@ -1,13 +1,16 @@
+import hashlib
+import json
 import uuid
 
 import pytest
 import swapper
 from django.template.response import TemplateResponse
-from django.urls import reverse
 from django_fsm import can_proceed
 from getpaid.types import BackendMethod as bm
 from getpaid.types import ConfirmationMethod as cm
 from getpaid.types import PaymentStatus as ps
+
+from getpaid_payu.types import OrderStatus
 
 pytestmark = pytest.mark.django_db
 
@@ -25,23 +28,49 @@ def _prep_conf(api_method: bm = bm.REST, confirm_method: cm = cm.PUSH) -> dict:
             "second_key": "b6ca15b0d1020e8094d9b5f8d163db54",
             "client_id": 300746,
             "client_secret": "2ee86a66e5d97e3fadc400c9f19b065d",
-            "method": api_method,
+            "paywall_method": api_method,
             "confirmation_method": confirm_method,
         }
     }
 
 
-def test_post_flow_begin(payment_factory, settings, requests_mock, rf):
+def test_post_flow_begin(payment_factory, settings, requests_mock, getpaid_client):
+    my_order_id = f"{uuid.uuid4()}"
+    requests_mock.post(
+        "/api/v2_1/orders",
+        json={
+            "status": {"statusCode": "SUCCESS",},
+            "redirectUri": "https://paywall.example.com/url",
+            "orderId": "WZHF5FFDRJ140731GUEST000P01",
+            "extOrderId": my_order_id,
+        },
+    )
+
     settings.GETPAID_BACKEND_SETTINGS = _prep_conf(api_method=bm.POST)
-    payment = payment_factory(external_id=uuid.uuid4())
+    payment = payment_factory(external_id=my_order_id)
 
     result = payment.prepare_transaction(None)
     assert result.status_code == 200
     assert isinstance(result, TemplateResponse)
-    assert payment.status == ps.PREPARED
+    assert payment.status == ps.NEW
 
 
-def test_rest_flow_begin(payment_factory, settings, requests_mock, rf):
+@pytest.mark.parametrize("response_status", [200, 201, 302])
+def test_rest_flow_begin(
+    response_status, payment_factory, settings, requests_mock, getpaid_client
+):
+    my_order_id = f"{uuid.uuid4()}"
+    requests_mock.post(
+        "/api/v2_1/orders",
+        json={
+            "status": {"statusCode": "SUCCESS",},
+            "redirectUri": "https://paywall.example.com/url",
+            "orderId": "WZHF5FFDRJ140731GUEST000P01",
+            "extOrderId": my_order_id,
+        },
+        status_code=response_status,
+    )
+
     settings.GETPAID_BACKEND_SETTINGS = _prep_conf(api_method=bm.REST)
 
     payment = payment_factory(external_id=uuid.uuid4())
@@ -53,78 +82,122 @@ def test_rest_flow_begin(payment_factory, settings, requests_mock, rf):
 
 
 # PULL flow
-def test_pull_flow_paid(payment_factory, settings, requests_mock, rf):
+@pytest.mark.parametrize(
+    "remote_status,our_status,callback",
+    [
+        (OrderStatus.COMPLETED, ps.PARTIAL, "mark_as_paid"),
+        (OrderStatus.WAITING_FOR_CONFIRMATION, ps.PRE_AUTH, None),
+        (OrderStatus.CANCELED, ps.FAILED, None),
+    ],
+)
+def test_pull_flow(
+    remote_status,
+    our_status,
+    callback,
+    payment_factory,
+    settings,
+    requests_mock,
+    getpaid_client,
+):
     settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PULL)
 
     payment = payment_factory(external_id=uuid.uuid4())
     payment.confirm_prepared()
-
-    url_get_status = reverse("paywall:get_status", kwargs={"pk": payment.external_id})
-    requests_mock.get(url_get_status, json={"payment_status": ps.PAID})
+    requests_mock.get(
+        f"/api/v2_1/orders/{payment.external_id}",
+        json={
+            "orders": [
+                {
+                    "extOrderId": f"{payment.id}",
+                    "customerIp": "127.0.0.1",
+                    "merchantPosId": getpaid_client.pos_id,
+                    "description": "description",
+                    "validityTime": 46000,
+                    "currencyCode": payment.currency,
+                    "totalAmount": f"{payment.amount_required}",
+                    "buyer": {},  # doesn't matter now
+                    "products": {},  # doesn't matter now
+                    "status": remote_status,
+                }
+            ],
+            "status": {"statusCode": "SUCCESS", "statusDesc": "some status"},
+        },
+    )
     payment.fetch_and_update_status()
     # all confirmed payments are by default marked as PARTIAL
-    assert payment.status == ps.PARTIAL
+    assert payment.status == our_status
     # and need to be checked and marked if complete
-    assert can_proceed(payment.mark_as_paid)
-
-
-def test_pull_flow_locked(payment_factory, settings, requests_mock, rf):
-    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PULL)
-
-    payment = payment_factory(external_id=uuid.uuid4())
-    payment.confirm_prepared()
-
-    url_get_status = reverse("paywall:get_status", kwargs={"pk": payment.external_id})
-    requests_mock.get(url_get_status, json={"payment_status": ps.PRE_AUTH})
-    payment.fetch_and_update_status()
-    assert payment.status == ps.PRE_AUTH
-
-
-def test_pull_flow_failed(payment_factory, settings, requests_mock, rf):
-    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PULL)
-
-    payment = payment_factory(external_id=uuid.uuid4())
-    payment.confirm_prepared()
-
-    url_get_status = reverse("paywall:get_status", kwargs={"pk": payment.external_id})
-    requests_mock.get(url_get_status, json={"payment_status": ps.FAILED})
-    payment.fetch_and_update_status()
-    assert payment.status == ps.FAILED
+    if callback:
+        callback_meth = getattr(payment, callback)
+        assert can_proceed(callback_meth)
 
 
 # PUSH flow
-def test_push_flow_paid(payment_factory, settings, requests_mock, rf):
+@pytest.mark.parametrize(
+    "remote_status,our_status",
+    [
+        (OrderStatus.COMPLETED, ps.PAID),
+        (OrderStatus.WAITING_FOR_CONFIRMATION, ps.PRE_AUTH),
+        (OrderStatus.CANCELED, ps.FAILED),
+    ],
+)
+def test_push_flow(
+    remote_status,
+    our_status,
+    payment_factory,
+    settings,
+    requests_mock,
+    rf,
+    getpaid_client,
+):
     settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PUSH)
 
     payment = payment_factory(external_id=uuid.uuid4())
     payment.confirm_prepared()
 
-    request = rf.post("", content_type="application/json", data={"new_status": ps.PAID})
-    payment.handle_paywall_callback(request)
-    assert payment.status == ps.PAID
-
-
-def test_push_flow_locked(payment_factory, settings, requests_mock, rf):
-    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PUSH)
-
-    payment = payment_factory(external_id=uuid.uuid4())
-    payment.confirm_prepared()
+    encoded = json.dumps(
+        {
+            "order": {
+                "orderId": "LDLW5N7MF4140324GUEST000P01",
+                "extOrderId": f"{payment.id}",
+                "orderCreateDate": "2012-12-31T12:00:00",
+                "notifyUrl": "http://tempuri.org/notify",
+                "customerIp": "127.0.0.1",
+                "merchantPosId": "{POS ID (pos_id)}",
+                "description": "My order description",
+                "currencyCode": payment.currency,
+                "totalAmount": getpaid_client._convert(payment.amount_required),
+                "buyer": {
+                    "email": "john.doe@example.org",
+                    "phone": "111111111",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "language": "en",
+                },
+                "payMethod": {"type": "PBL",},
+                "products": [
+                    {
+                        "name": "Product 1",
+                        "unitPrice": getpaid_client._convert(payment.amount_required),
+                        "quantity": "1",
+                    }
+                ],
+                "status": remote_status,
+            },
+            "localReceiptDateTime": "2016-03-02T12:58:14.828+01:00",
+            "properties": [{"name": "PAYMENT_ID", "value": "151471228"}],
+        }
+    )
+    sig = hashlib.md5(
+        f"{encoded}{getpaid_client.second_key}".encode("utf-8")
+    ).hexdigest()
+    compiled = f"sender=checkout;signature={sig};algorithm=MD5;content=DOCUMENT"
 
     request = rf.post(
-        "", content_type="application/json", data={"new_status": ps.PRE_AUTH}
+        "",
+        content_type="application/json",
+        data=encoded,
+        HTTP_X_OPENPAYU_SIGNATURE=compiled,
     )
     payment.handle_paywall_callback(request)
-    assert payment.status == ps.PRE_AUTH
-
-
-def test_push_flow_failed(payment_factory, settings, requests_mock, rf):
-    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PUSH)
-
-    payment = payment_factory(external_id=uuid.uuid4())
-    payment.confirm_prepared()
-
-    request = rf.post(
-        "", content_type="application/json", data={"new_status": ps.FAILED}
-    )
-    payment.handle_paywall_callback(request)
-    assert payment.status == ps.FAILED
+    assert payment.status == our_status

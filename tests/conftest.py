@@ -23,8 +23,8 @@ def getpaid_client(requests_mock):
     )
     yield Client(
         api_url="https://example.com/",
-        pos_id=12345,
-        second_key="abcdef",
-        oauth_id=12345,
-        oauth_secret="abcdef",
+        pos_id=300746,
+        second_key="b6ca15b0d1020e8094d9b5f8d163db54",
+        oauth_id=300746,
+        oauth_secret="2ee86a66e5d97e3fadc400c9f19b065d",
     )

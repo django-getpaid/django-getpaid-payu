@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 from decimal import Decimal
 from functools import wraps
@@ -6,6 +7,7 @@ from urllib.parse import urljoin
 
 import pendulum
 import requests
+from django.core.serializers.json import DjangoJSONEncoder
 from getpaid.exceptions import (
     ChargeFailure,
     CommunicationError,
@@ -77,7 +79,7 @@ class Client:
             )
 
     def _headers(self, **kwargs):
-        data = {"Authorization": self.token}
+        data = {"Authorization": self.token, "Content-Type": "application/json"}
         data.update(kwargs)
         return data
 
@@ -154,8 +156,9 @@ class Client:
             data["buyer"] = buyer
         headers = self._headers(**kwargs)
         data.update(kwargs)
+        encoded = json.dumps(data, cls=DjangoJSONEncoder)
         self.last_response = requests.post(
-            url, headers=headers, json=data, allow_redirects=False
+            url, headers=headers, data=encoded, allow_redirects=False
         )
         if self.last_response.status_code in [200, 201, 302]:
             return self._normalize(self.last_response.json())
@@ -175,9 +178,11 @@ class Client:
         data = {"description": description if description else "Refund"}
         if amount:
             data["amount"] = self._convert(amount)
-        post_data = {"refund": data, "orderId": order_id}  # type: RefundRequest
+        encoded = json.dumps(
+            {"refund": data, "orderId": order_id}, cls=DjangoJSONEncoder
+        )
         self.last_response = requests.post(
-            url, headers=self._headers(**kwargs), json=post_data,
+            url, headers=self._headers(**kwargs), data=encoded,
         )
         if self.last_response.status_code == 200:
             return self._normalize(self.last_response.json())

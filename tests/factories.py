@@ -19,7 +19,7 @@ class PaymentFactory(factory.DjangoModelFactory):
     amount_required = factory.SelfAttribute("order.total")
     currency = factory.SelfAttribute("order.currency")
     description = factory.SelfAttribute("order.name")
-    backend = "getpaid.backends.dummy"
+    backend = "getpaid_payu"
 
     class Meta:
         model = swapper.load_model("getpaid", "Payment")

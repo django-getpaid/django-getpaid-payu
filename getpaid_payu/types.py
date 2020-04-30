@@ -208,7 +208,7 @@ class OrderStatus(AutoName):
 
 
 class OrderStatusObj(TypedDict):
-    statusCode: OrderStatus
+    statusCode: ResponseStatus
     statusDesc: Optional[str]
 
 
@@ -224,12 +224,12 @@ class OrderData(TypedDict):
     buyer: BuyerData
     products: List[ProductData]
     payMethods: Optional[PayMethods]
+    status: OrderStatus
 
 
 class ReceivedOrderData(OrderData):
     orderId: Union[str, int]
     orderCreateDate: Union[str, datetime]
-    status: OrderStatus
 
 
 class OrderNotification(TypedDict):
