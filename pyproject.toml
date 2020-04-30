@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-getpaid-payu"
-version = "0.2.0-pre.3"
+version = "0.2.0"
 description = "Django-GetPaid plugin for PayU service."
 authors = ["Dominik Kozaczko <dominik@kozaczko.info>"]
 license = "MIT"
@@ -13,7 +13,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.6"
-django-getpaid = "^2.1.0-pre.1"
+django-getpaid = "^2.1.0"
 requests = "^2.23.0"
 swapper = "^1.1.2"
 typing-extensions = "^3.7.4"
