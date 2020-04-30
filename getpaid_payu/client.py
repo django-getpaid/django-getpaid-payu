@@ -19,6 +19,7 @@ from .types import (
     BuyerData,
     CancellationResponse,
     ChargeResponse,
+    Currency,
     OrderStatus,
     PaymentResponse,
     ProductData,
@@ -68,7 +69,7 @@ class Client:
         )
         if self.last_response.status_code == 200:
             data = self.last_response.json()
-            self.token = f"{data['token_type'].capitalize()} {data['grant_type']}"
+            self.token = f"{data['token_type'].capitalize()} {data['access_token']}"
             self.token_expiration = pendulum.now().add(seconds=int(data["expires_in"]))
         else:
             raise CredentialsError(
@@ -107,7 +108,7 @@ class Client:
     def new_order(
         self,
         amount: Union[Decimal, float],
-        currency: str,
+        currency: Currency,
         order_id: Union[str, int],
         description: Optional[str] = None,
         customer_ip: Optional[str] = None,
@@ -153,7 +154,9 @@ class Client:
             data["buyer"] = buyer
         headers = self._headers(**kwargs)
         data.update(kwargs)
-        self.last_response = requests.post(url, headers=headers, json=data)
+        self.last_response = requests.post(
+            url, headers=headers, json=data, allow_redirects=False
+        )
         if self.last_response.status_code in [200, 201, 302]:
             return self._normalize(self.last_response.json())
         raise LockFailure(

@@ -5,7 +5,7 @@ from typing import Any, List, Optional, Union
 from typing_extensions import Literal, TypedDict
 
 
-class AutoName(Enum):
+class AutoName(str, Enum):
     def _generate_next_value_(name, start, count, last_values):
         return name.strip("_")
 
