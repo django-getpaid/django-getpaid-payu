@@ -10,7 +10,7 @@ from getpaid.exceptions import (
     ChargeFailure,
     CommunicationError,
     CredentialsError,
-    GetpaidException,
+    GetPaidException,
     LockFailure,
     RefundFailure,
 )
@@ -188,7 +188,7 @@ class Client:
         self.last_response = requests.delete(url, headers=self._headers(**kwargs))
         if self.last_response.status_code == 200:
             return self._normalize(self.last_response.json())
-        raise GetpaidException(
+        raise GetPaidException(
             "Error cancelling order", context={"raw_response": self.last_response}
         )
 

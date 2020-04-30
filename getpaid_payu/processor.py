@@ -11,9 +11,9 @@ import logging
 from collections import OrderedDict
 from urllib.parse import urljoin
 
-import requests
 from django import http
 from django.db.transaction import atomic
+from django.http import HttpResponse
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.http import urlencode
@@ -21,9 +21,11 @@ from django_fsm import can_proceed
 from getpaid.exceptions import LockFailure
 from getpaid.post_forms import PaymentHiddenInputsPostForm
 from getpaid.processor import BaseProcessor
+from getpaid.types import BackendMethod as bm
+from getpaid.types import PaymentStatusResponse
 
 from .client import Client
-from .types import Currency, OrderStatus, ResponseStatus
+from .types import Currency, OrderStatus, RefundStatus, ResponseStatus
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,7 @@ class PaymentProcessor(BaseProcessor):
     def get_client_params(self) -> dict:
         return {
             "api_url": self.get_paywall_baseurl(),
-            "pos_id": self.get_setting("pod_id"),
+            "pos_id": self.get_setting("pos_id"),
             "second_key": self.get_setting("second_key"),
             "oauth_id": self.get_setting("oauth_id"),
             "oauth_secret": self.get_setting("oauth_secret"),
@@ -87,7 +89,10 @@ class PaymentProcessor(BaseProcessor):
             "notify_url": "notifyUrl",
         }
         raw_products = self.payment.get_items()
-        products = {key_trans.get(k, k): v for k, v in raw_products.items()}
+        products = [
+            {key_trans.get(k, k): v for k, v in product.items()}
+            for product in raw_products
+        ]
         context = {
             "order_id": self.payment.get_unique_id(),
             "customer_ip": loc if not request else request.META.get("REMOTE_ADDR", loc),
@@ -112,7 +117,7 @@ class PaymentProcessor(BaseProcessor):
     @atomic()
     def prepare_transaction(self, request=None, view=None, **kwargs):
         method = self.get_paywall_method().upper()
-        if method == "REST":
+        if method == bm.REST:
             try:
                 results = self.prepare_lock(request=request, **kwargs)
                 response = http.HttpResponseRedirect(results["url"])
@@ -124,7 +129,7 @@ class PaymentProcessor(BaseProcessor):
                 )
             self.payment.save()
             return response
-        elif method == "POST":
+        elif method == bm.POST:
             data = self.get_paywall_context(
                 request=request, camelize_keys=True, **kwargs
             )
@@ -141,6 +146,8 @@ class PaymentProcessor(BaseProcessor):
         payu_header_raw = request.headers.get(
             "OpenPayU-Signature"
         ) or request.headers.get("X-OpenPayU-Signature", "")
+        if not payu_header_raw:
+            return HttpResponse("NO SIGNATURE", status=400)
         payu_header = {
             k: v for k, v in [i.split("=") for i in payu_header_raw.split(";")]
         }
@@ -159,7 +166,7 @@ class PaymentProcessor(BaseProcessor):
             if "order" in data:
                 order_data = data.get("order")
                 status = order_data.get("status")
-                if status == "COMPLETED":
+                if status == OrderStatus.COMPLETED:
                     if can_proceed(self.payment.confirm_payment):
                         self.payment.confirm_payment()
                     else:
@@ -170,9 +177,9 @@ class PaymentProcessor(BaseProcessor):
                                 "payment_status": self.payment.status,
                             },
                         )
-                elif status == "CANCELED":
+                elif status == OrderStatus.CANCELED:
                     self.payment.fail()
-                elif status == "WAITING_FOR_CONFIRMATION":
+                elif status == OrderStatus.WAITING_FOR_CONFIRMATION:
                     if can_proceed(self.payment.confirm_lock):
                         self.payment.confirm_lock()
                     else:
@@ -186,23 +193,27 @@ class PaymentProcessor(BaseProcessor):
             elif "refund" in data:
                 refund_data = data.get("refund")
                 status = refund_data.get("status")
-                if status == "FINALIZED":
+                if status == RefundStatus.FINALIZED:
                     amount = refund_data.get("amount") / 100
                     self.payment.confirm_refund(amount)
                     if can_proceed(self.payment.mark_as_refunded):
                         self.payment.mark_as_refunded()
-                elif status == "CANCELED":
+                elif status == RefundStatus.CANCELED:
                     self.payment.cancel_refund()
                     if can_proceed(self.payment.mark_as_paid):
                         self.payment.mark_as_paid()
             self.payment.save()
+            return HttpResponse("OK")
         else:
             logger.error(
                 f"Received bad signature for payment {self.payment.id}! "
                 f"Got '{signature}', expected '{expected_signature}'"
             )
+            return HttpResponse(
+                "BAD SIGNATURE", status=422
+            )  # https://httpstatuses.com/422
 
-    def fetch_payment_status(self):
+    def fetch_payment_status(self) -> PaymentStatusResponse:
         response = self.client.get_order_info(self.payment.external_id)
         results = {"raw_response": self.client.last_response}
         order_data = response.get("orders", [None])[0]

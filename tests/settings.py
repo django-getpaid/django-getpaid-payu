@@ -17,6 +17,7 @@ GETPAID_BACKEND_SETTINGS = {
         "client_id": 300746,
         "client_secret": "2ee86a66e5d97e3fadc400c9f19b065d",
         "confirmation_method": "PULL",
+        "method": "REST",
     },
 }
 
@@ -30,7 +31,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django_fsm",
     "getpaid",
-    "getpaid.backends.dummy",
+    "getpaid_payu",
     "orders",
     "paywall",
 ]
@@ -65,7 +66,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "example.wsgi.application"
 
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
+DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": "db.sqlite3"}}
 
 TIME_ZONE = "UTC"
 USE_I18N = False

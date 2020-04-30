@@ -6,7 +6,10 @@ import swapper
 from django.template.response import TemplateResponse
 from django.urls import reverse, reverse_lazy
 from django_fsm import can_proceed
-from getpaid.status import PaymentStatus as ps
+from getpaid.types import BackendMethod as bm
+from getpaid.types import ConfirmationMethod as cm
+from getpaid.types import PaymentStatus as ps
+from mock import MagicMock, Mock, patch
 
 pytestmark = pytest.mark.django_db
 
@@ -18,18 +21,22 @@ url_api_register = "https://secure.snd.payu.com/api/v2_1/orders"
 url_api_operate = reverse_lazy("paywall:api_operate")
 
 
-def test_get_flow_begin(payment_factory, settings, live_server, requests_mock, rf):
-    os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {"getpaid.backends.dummy": {"method": "GET"}}
-    payment = payment_factory(external_id=uuid.uuid4())
-
-    result = payment.prepare_transaction(None)
-    assert result.status_code == 302
+def _prep_conf(api_method: bm = bm.REST, confirm_method: cm = cm.PUSH) -> dict:
+    return {
+        "getpaid_payu": {
+            "pos_id": 300746,
+            "second_key": "b6ca15b0d1020e8094d9b5f8d163db54",
+            "client_id": 300746,
+            "client_secret": "2ee86a66e5d97e3fadc400c9f19b065d",
+            "method": api_method,
+            "confirmation_method": confirm_method,
+        }
+    }
 
 
 def test_post_flow_begin(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {"getpaid.backends.dummy": {"method": "POST"}}
+    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(api_method=bm.POST)
     payment = payment_factory(external_id=uuid.uuid4())
 
     result = payment.prepare_transaction(None)
@@ -40,7 +47,7 @@ def test_post_flow_begin(payment_factory, settings, live_server, requests_mock, 
 
 def test_rest_flow_begin(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {"getpaid.backends.dummy": {"method": "REST"}}
+    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(api_method=bm.REST)
 
     payment = payment_factory(external_id=uuid.uuid4())
     requests_mock.post(str(url_api_register), json={"url": str(url_post_payment)})
@@ -54,7 +61,7 @@ def test_rest_flow_begin(payment_factory, settings, live_server, requests_mock, 
 def test_pull_flow_paid(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
     settings.GETPAID_BACKEND_SETTINGS = {
-        "getpaid.backends.dummy": {"confirmation_method": "PULL"}
+        "getpaid.backends.dummy": _prep_conf(confirm_method=cm.PULL)
     }
 
     payment = payment_factory(external_id=uuid.uuid4())
@@ -71,9 +78,7 @@ def test_pull_flow_paid(payment_factory, settings, live_server, requests_mock, r
 
 def test_pull_flow_locked(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {
-        "getpaid.backends.dummy": {"confirmation_method": "PULL"}
-    }
+    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PULL)
 
     payment = payment_factory(external_id=uuid.uuid4())
     payment.confirm_prepared()
@@ -86,9 +91,7 @@ def test_pull_flow_locked(payment_factory, settings, live_server, requests_mock,
 
 def test_pull_flow_failed(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {
-        "getpaid.backends.dummy": {"confirmation_method": "PULL"}
-    }
+    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PULL)
 
     payment = payment_factory(external_id=uuid.uuid4())
     payment.confirm_prepared()
@@ -102,9 +105,7 @@ def test_pull_flow_failed(payment_factory, settings, live_server, requests_mock,
 # PUSH flow
 def test_push_flow_paid(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {
-        "getpaid.backends.dummy": {"confirmation_method": "PUSH"}
-    }
+    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PUSH)
 
     payment = payment_factory(external_id=uuid.uuid4())
     payment.confirm_prepared()
@@ -116,9 +117,7 @@ def test_push_flow_paid(payment_factory, settings, live_server, requests_mock, r
 
 def test_push_flow_locked(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {
-        "getpaid.backends.dummy": {"confirmation_method": "PUSH"}
-    }
+    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PUSH)
 
     payment = payment_factory(external_id=uuid.uuid4())
     payment.confirm_prepared()
@@ -132,9 +131,7 @@ def test_push_flow_locked(payment_factory, settings, live_server, requests_mock,
 
 def test_push_flow_failed(payment_factory, settings, live_server, requests_mock, rf):
     os.environ["_PAYWALL_URL"] = live_server.url
-    settings.GETPAID_BACKEND_SETTINGS = {
-        "getpaid.backends.dummy": {"confirmation_method": "PUSH"}
-    }
+    settings.GETPAID_BACKEND_SETTINGS = _prep_conf(confirm_method=cm.PUSH)
 
     payment = payment_factory(external_id=uuid.uuid4())
     payment.confirm_prepared()
