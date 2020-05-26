@@ -2,7 +2,7 @@ import json
 from copy import deepcopy
 from decimal import Decimal
 from functools import wraps
-from typing import Callable, Iterable, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 from urllib.parse import urljoin
 
 import pendulum
@@ -16,6 +16,7 @@ from getpaid.exceptions import (
     LockFailure,
     RefundFailure,
 )
+from getpaid.types import ItemInfo
 
 from .types import (
     BuyerData,
@@ -25,7 +26,6 @@ from .types import (
     OrderStatus,
     PaymentResponse,
     ProductData,
-    RefundRequest,
     RefundResponse,
     RetrieveOrderInfoResponse,
 )
@@ -84,20 +84,43 @@ class Client:
         return data
 
     @staticmethod
-    def _convert(amount: Union[Decimal, float]) -> int:
-        return int(amount * 100)
+    def _key_to_payu(key: str) -> str:
+        trans = {"unit_price": "unitPrice"}
+        return trans.get(key, key)
+
+    @staticmethod
+    def _key_to_norm(key: str) -> str:
+        trans = {"unitPrice": "unit_price"}
+        return trans.get(key, key)
 
     @classmethod
-    def _normalize(cls, data: Union[dict, list]):
+    def _convert(cls, data: Union[ItemInfo, dict, list, Decimal, int, float, str]):
         """
         Traverse through given object and convert all values of 'amount'
-        fields to normal.
+        fields and all keys to PayU format.
         :param data: Converted data
         """
         data = deepcopy(data)
         if hasattr(data, "items"):
             return {
-                k: Decimal(v) / 100
+                cls._key_to_payu(k): v * 100 if k in {"unit_price"} else cls._convert(v)
+                for k, v in data.items()
+            }
+        elif isinstance(data, list):
+            return [cls._convert(v) for v in data]
+        return data
+
+    @classmethod
+    def _normalize(cls, data: Union[ItemInfo, dict, list, Decimal, int, float, str]):
+        """
+        Traverse through given object and convert all values of 'amount'
+        fields to normal and all PayU-specific keys to standard ones.
+        :param data: Converted data
+        """
+        data = deepcopy(data)
+        if hasattr(data, "items"):
+            return {
+                cls._key_to_norm(k): Decimal(v) / 100
                 if k in {"amount", "total", "available", "unitPrice", "totalAmount"}
                 else cls._normalize(v)
                 for k, v in data.items()
@@ -140,7 +163,7 @@ class Client:
             "description": description if description else "Payment order",
             "currencyCode": currency,
             "totalAmount": self._convert(amount),
-            "products": self._normalize(products)
+            "products": self._convert(products)
             if products
             else [
                 {

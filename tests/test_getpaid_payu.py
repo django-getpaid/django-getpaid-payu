@@ -186,7 +186,8 @@ def test_push_flow(
             },
             "localReceiptDateTime": "2016-03-02T12:58:14.828+01:00",
             "properties": [{"name": "PAYMENT_ID", "value": "151471228"}],
-        }
+        },
+        default=str,
     )
     sig = hashlib.md5(
         f"{encoded}{getpaid_client.second_key}".encode("utf-8")
