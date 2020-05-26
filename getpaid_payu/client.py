@@ -43,6 +43,7 @@ def ensure_auth(func: Callable) -> Callable:
 
 class Client:
     last_response = None
+    _convertables = {"amount", "total", "available", "unitPrice", "totalAmount"}
 
     def __init__(
         self,
@@ -84,7 +85,7 @@ class Client:
         return data
 
     @classmethod
-    def _convert(cls, data: Union[ItemInfo, dict, list, Decimal, int, float, str]):
+    def _centify(cls, data: Union[ItemInfo, dict, list, Decimal, int, float, str]):
         """
         Traverse through given object and convert all values of 'amount'
         fields and all keys to PayU format.
@@ -93,11 +94,11 @@ class Client:
         data = deepcopy(data)
         if hasattr(data, "items"):
             return {
-                k: int(v * 100) if k == "unitPrice" else cls._convert(v)
+                k: int(v * 100) if k in cls._convertables else cls._centify(v)
                 for k, v in data.items()
             }
         elif isinstance(data, list):
-            return [cls._convert(v) for v in data]
+            return [cls._centify(v) for v in data]
         return data
 
     @classmethod
@@ -110,9 +111,7 @@ class Client:
         data = deepcopy(data)
         if hasattr(data, "items"):
             return {
-                k: Decimal(v) / 100
-                if k in {"amount", "total", "available", "unitPrice", "totalAmount"}
-                else cls._normalize(v)
+                k: Decimal(v) / 100 if k in cls._convertables else cls._normalize(v)
                 for k, v in data.items()
             }
         elif isinstance(data, list):
@@ -146,23 +145,19 @@ class Client:
         :return: JSON response from API
         """
         url = urljoin(self.api_url, "/api/v2_1/orders")
-        data = {
-            "extOrderId": order_id,
-            "customerIp": customer_ip if customer_ip else "127.0.0.1",
-            "merchantPosId": self.pos_id,
-            "description": description if description else "Payment order",
-            "currencyCode": currency,
-            "totalAmount": self._convert(amount),
-            "products": self._convert(products)
-            if products
-            else [
-                {
-                    "name": "Total order",
-                    "unitPrice": self._convert(amount),
-                    "quantity": 1,
-                }
-            ],
-        }
+        data = self._centify(
+            {
+                "extOrderId": order_id,
+                "customerIp": customer_ip if customer_ip else "127.0.0.1",
+                "merchantPosId": self.pos_id,
+                "description": description if description else "Payment order",
+                "currencyCode": currency,
+                "totalAmount": amount,
+                "products": products
+                if products
+                else [{"name": "Total order", "unitPrice": amount, "quantity": 1}],
+            }
+        )
         if notify_url:
             data["notifyUrl"] = notify_url
         if buyer:
@@ -190,9 +185,9 @@ class Client:
         url = urljoin(self.api_url, f"/api/v2_1/orders/{order_id}/refunds")
         data = {"description": description if description else "Refund"}
         if amount:
-            data["amount"] = self._convert(amount)
+            data["amount"] = amount
         encoded = json.dumps(
-            {"refund": data, "orderId": order_id}, cls=DjangoJSONEncoder
+            {"refund": self._centify(data), "orderId": order_id}, cls=DjangoJSONEncoder
         )
         self.last_response = requests.post(
             url, headers=self._headers(**kwargs), data=encoded,

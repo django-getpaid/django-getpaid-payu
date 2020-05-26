@@ -16,8 +16,8 @@ GETPAID_BACKEND_SETTINGS = {
     "getpaid_payu": {
         "pos_id": 300746,
         "second_key": "b6ca15b0d1020e8094d9b5f8d163db54",
-        "client_id": 300746,
-        "client_secret": "2ee86a66e5d97e3fadc400c9f19b065d",
+        "oauth_id": 300746,
+        "oauth_secret": "2ee86a66e5d97e3fadc400c9f19b065d",
         "confirmation_method": "PULL",  # required for local testing
     },
 }

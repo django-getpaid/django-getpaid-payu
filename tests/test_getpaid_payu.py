@@ -166,7 +166,7 @@ def test_push_flow(
                 "merchantPosId": "{POS ID (pos_id)}",
                 "description": "My order description",
                 "currencyCode": payment.currency,
-                "totalAmount": getpaid_client._convert(payment.amount_required),
+                "totalAmount": getpaid_client._centify(payment.amount_required),
                 "buyer": {
                     "email": "john.doe@example.org",
                     "phone": "111111111",
@@ -178,7 +178,7 @@ def test_push_flow(
                 "products": [
                     {
                         "name": "Product 1",
-                        "unitPrice": getpaid_client._convert(payment.amount_required),
+                        "unitPrice": getpaid_client._centify(payment.amount_required),
                         "quantity": "1",
                     }
                 ],

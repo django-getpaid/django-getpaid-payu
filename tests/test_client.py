@@ -28,8 +28,9 @@ url_api_operate = reverse_lazy("paywall:api_operate")
 @pytest.mark.parametrize(
     "before,after",
     [
+        ({"unitPrice": 100}, {"unitPrice": Decimal("1")}),
         ({"amount": 100}, {"amount": Decimal("1")}),
-        ([{"amount": 100},], [{"amount": Decimal("1")},]),
+        ([{"amount": 100}], [{"amount": Decimal("1")}]),
         ({"internal": {"amount": 100}}, {"internal": {"amount": Decimal("1")}}),
         ({"internal": [{"amount": 100}]}, {"internal": [{"amount": Decimal("1")}]}),
         (
@@ -47,6 +48,7 @@ def test_normalize(before, after, getpaid_client):
     "before,after",
     [
         ({"unitPrice": 1}, {"unitPrice": 100}),
+        ({"amount": 1}, {"amount": 100}),
         ({"unitPrice": 1.0}, {"unitPrice": 100}),
         ({"unitPrice": Decimal("1")}, {"unitPrice": 100}),
         ([{"unitPrice": Decimal("1")}], [{"unitPrice": 100}]),
@@ -61,8 +63,8 @@ def test_normalize(before, after, getpaid_client):
         ),
     ],
 )
-def test_convert(before, after, getpaid_client):
-    result = getpaid_client._convert(before)
+def test_centify(before, after, getpaid_client):
+    result = getpaid_client._centify(before)
     assert result == after
 
 

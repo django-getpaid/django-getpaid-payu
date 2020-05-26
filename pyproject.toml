@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-getpaid-payu"
-version = "0.2.0"
+version = "0.2.1"
 description = "Django-GetPaid plugin for PayU service."
 authors = ["Dominik Kozaczko <dominik@kozaczko.info>"]
 license = "MIT"
