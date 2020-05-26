@@ -43,6 +43,29 @@ def test_normalize(before, after, getpaid_client):
     assert result == after
 
 
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ({"unitPrice": 1}, {"unitPrice": 100}),
+        ({"unitPrice": 1.0}, {"unitPrice": 100}),
+        ({"unitPrice": Decimal("1")}, {"unitPrice": 100}),
+        ([{"unitPrice": Decimal("1")}], [{"unitPrice": 100}]),
+        ({"internal": {"unitPrice": Decimal("1")}}, {"internal": {"unitPrice": 100}}),
+        (
+            {"internal": [{"unitPrice": Decimal("1")}]},
+            {"internal": [{"unitPrice": 100}]},
+        ),
+        (
+            [{"internal": [{"unitPrice": Decimal("1")}]}],
+            [{"internal": [{"unitPrice": 100}]}],
+        ),
+    ],
+)
+def test_convert(before, after, getpaid_client):
+    result = getpaid_client._convert(before)
+    assert result == after
+
+
 @pytest.mark.parametrize("response_status", [200, 201, 302])
 def test_new_order(response_status, getpaid_client, requests_mock):
     my_order_id = f"{uuid.uuid4()}"

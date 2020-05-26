@@ -83,16 +83,6 @@ class Client:
         data.update(kwargs)
         return data
 
-    @staticmethod
-    def _key_to_payu(key: str) -> str:
-        trans = {"unit_price": "unitPrice"}
-        return trans.get(key, key)
-
-    @staticmethod
-    def _key_to_norm(key: str) -> str:
-        trans = {"unitPrice": "unit_price"}
-        return trans.get(key, key)
-
     @classmethod
     def _convert(cls, data: Union[ItemInfo, dict, list, Decimal, int, float, str]):
         """
@@ -103,7 +93,7 @@ class Client:
         data = deepcopy(data)
         if hasattr(data, "items"):
             return {
-                cls._key_to_payu(k): v * 100 if k in {"unit_price"} else cls._convert(v)
+                k: int(v * 100) if k == "unitPrice" else cls._convert(v)
                 for k, v in data.items()
             }
         elif isinstance(data, list):
@@ -120,7 +110,7 @@ class Client:
         data = deepcopy(data)
         if hasattr(data, "items"):
             return {
-                cls._key_to_norm(k): Decimal(v) / 100
+                k: Decimal(v) / 100
                 if k in {"amount", "total", "available", "unitPrice", "totalAmount"}
                 else cls._normalize(v)
                 for k, v in data.items()
