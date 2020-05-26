@@ -97,7 +97,7 @@ class Client:
         data = deepcopy(data)
         if hasattr(data, "items"):
             return {
-                k: Decimal(v) / 100
+                k: cls._convert(Decimal(v) / 100)
                 if k in {"amount", "total", "available", "unitPrice", "totalAmount"}
                 else cls._normalize(v)
                 for k, v in data.items()
@@ -140,11 +140,9 @@ class Client:
             "description": description if description else "Payment order",
             "currencyCode": currency,
             "totalAmount": self._convert(amount),
-            "products": self._normalize(products)
-            if products
-            else [
+            "products": self._normalize(products) if products else [
                 {
-                    "name": "Total order",
+                    "name": "Wireless mouse",
                     "unitPrice": self._convert(amount),
                     "quantity": 1,
                 }
@@ -163,7 +161,7 @@ class Client:
         if self.last_response.status_code in [200, 201, 302]:
             return self._normalize(self.last_response.json())
         raise LockFailure(
-            "Error creating order", context={"raw_response": self.last_response}
+            f"Error creating order. Payu response {self.last_response.json()}", context={"raw_response": self.last_response}
         )
 
     @ensure_auth
@@ -203,7 +201,7 @@ class Client:
     @ensure_auth
     def capture(self, order_id: str, **kwargs) -> ChargeResponse:
         url = urljoin(self.api_url, f"/api/v2_1/orders/{order_id}/status")
-        data = {"orderId": order_id, "orderStatus": OrderStatus.COMPLETED}
+        # data = {"orderId": order_id, "orderStatus": OrderStatus.COMPLETED}
         self.last_response = requests.put(url, headers=self._headers(**kwargs))
         if self.last_response.status_code == 200:
             return self._normalize(self.last_response.json())
