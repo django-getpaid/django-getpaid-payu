@@ -142,7 +142,7 @@ class Client:
             "totalAmount": self._convert(amount),
             "products": self._normalize(products) if products else [
                 {
-                    "name": "Wireless mouse",
+                    "name": "Total order",
                     "unitPrice": self._convert(amount),
                     "quantity": 1,
                 }
