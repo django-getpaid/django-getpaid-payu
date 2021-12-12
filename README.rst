@@ -24,6 +24,8 @@ Installation
 
 First make sure that `django-getpaid <https://django-getpaid.readthedocs.io/>`_ is installed and configured.
 
+Then, simply install the plugin:
+
 .. code-block:: shell
 
     pip install django-getpaid-payu
@@ -59,9 +61,9 @@ Add ``"getpaid_payu"`` to your ``INSTALLED_APPS`` and add plugin configuration.
 
 .. note::
 
-    If DEBUG setting is set to True, the plugin will use the sandbox API.
+    If ``DEBUG`` setting is set to ``True``, the plugin will use the sandbox API.
 
-That should be enough to make your ``getpaid`` integration use new plugin
+That should be enough to make your ``django-getpaid`` integration use new plugin
 and allow you to choose PayU for supported currencies.
 
 Other settings
