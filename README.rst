@@ -1,6 +1,12 @@
+.. image:: https://img.shields.io/pypi/v/django-getpaid-payu.svg
+    :target: https://pypi.org/project/django-getpaid-payu/
+    :alt: Latest PyPI version
 .. image:: https://github.com/django-getpaid/django-getpaid-payu/actions/workflows/run_tox.yml/badge.svg
     :target: https://github.com/django-getpaid/django-getpaid-payu/actions/
-
+.. image:: https://img.shields.io/pypi/wheel/django-getpaid-payu.svg
+    :target: https://pypi.org/project/django-getpaid-payu/
+.. image:: https://img.shields.io/pypi/l/django-getpaid-payu.svg
+    :target: https://pypi.org/project/django-getpaid-payu/
 
 ===================
 django-getpaid-payu
