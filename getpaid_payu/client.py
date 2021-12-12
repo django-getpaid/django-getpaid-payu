@@ -2,7 +2,7 @@ import json
 from copy import deepcopy
 from decimal import Decimal
 from functools import wraps
-from typing import Any, Callable, List, Optional, Union
+from typing import Callable, List, Optional, Union
 from urllib.parse import urljoin
 
 import pendulum
@@ -190,7 +190,9 @@ class Client:
             {"refund": self._centify(data), "orderId": order_id}, cls=DjangoJSONEncoder
         )
         self.last_response = requests.post(
-            url, headers=self._headers(**kwargs), data=encoded,
+            url,
+            headers=self._headers(**kwargs),
+            data=encoded,
         )
         if self.last_response.status_code == 200:
             return self._normalize(self.last_response.json())
@@ -212,7 +214,9 @@ class Client:
     def capture(self, order_id: str, **kwargs) -> ChargeResponse:
         url = urljoin(self.api_url, f"/api/v2_1/orders/{order_id}/status")
         data = {"orderId": order_id, "orderStatus": OrderStatus.COMPLETED}
-        self.last_response = requests.put(url, headers=self._headers(**kwargs))
+        self.last_response = requests.put(
+            url, headers=self._headers(**kwargs), data=data
+        )
         if self.last_response.status_code == 200:
             return self._normalize(self.last_response.json())
         raise ChargeFailure(

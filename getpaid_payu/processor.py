@@ -38,7 +38,12 @@ class PaymentProcessor(BaseProcessor):
     method = "REST"  #: Supported modes: REST, POST (not recommended!)
     sandbox_url = "https://secure.snd.payu.com/"
     production_url = "https://secure.payu.com/"
-    confirmation_method = "PUSH"  #: PUSH - paywall will send POST request to your server; PULL - you need to check the payment status
+    confirmation_method = (
+        "PUSH"
+        #: PUSH - paywall will send POST request to your server
+        #: PULL - you need to check the payment status
+    )
+
     post_form_class = PaymentHiddenInputsPostForm
     post_template_name = "getpaid_payu/payment_post_form.html"
     client_class = Client
@@ -46,11 +51,6 @@ class PaymentProcessor(BaseProcessor):
     _token_expires = None
 
     # Specifics
-
-    def get_our_baseurl(self, request=None):
-        if request is None:
-            return "http://127.0.0.1/"
-        return super().get_our_baseurl(request)
 
     def get_client_params(self) -> dict:
         return {
@@ -81,6 +81,7 @@ class PaymentProcessor(BaseProcessor):
         """
         "buyer" is optional
         :param request: request creating the payment
+        :param camelize_keys: whether the keys in result should be in camelCase
         :return: dict that unpacked will be accepted by :meth:`Client.new_order`
         """
         loc = "127.0.0.1"
@@ -92,12 +93,14 @@ class PaymentProcessor(BaseProcessor):
             "order_id": "extOrderId",
             "customer_ip": "customerIp",
             "notify_url": "notifyUrl",
+            "continue_url": "continueUrl",
         }
         raw_products = self.payment.get_items()
         products = [
             {key_trans.get(k, k): v for k, v in product.items()}
             for product in raw_products
         ]
+        buyer_info = {key_trans.get(k, k): v for k, v in self.payment.get_buyer_info()}
         context = {
             "order_id": self.payment.get_unique_id(),
             "customer_ip": loc if not request else request.META.get("REMOTE_ADDR", loc),
@@ -105,6 +108,8 @@ class PaymentProcessor(BaseProcessor):
             "currency": self.payment.currency,
             "amount": self.payment.amount_required,
             "products": products,
+            "buyer": buyer_info,
+            "continue_url": self.payment.order.get_success_url(request=request),
         }
         if self.get_setting("confirmation_method", self.confirmation_method) == "PUSH":
             context["notify_url"] = urljoin(
@@ -247,7 +252,7 @@ class PaymentProcessor(BaseProcessor):
 
     def prepare_lock(self, request=None, **kwargs):
         results = {}
-        params = self.get_paywall_context(request=request, **kwargs)
+        params = self.get_paywall_context(request=request, camelize_keys=True, **kwargs)
         response = self.client.new_order(**params)
         results["raw_response"] = self.client.last_response
         results["url"] = response.get("redirectUri")

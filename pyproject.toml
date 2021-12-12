@@ -57,7 +57,7 @@ test = [
 
 [tool.black]
 line-length = 88
-target-version = ['py37']
+target-version = ['py37', 'py38', 'py39', 'py310']
 include = '\.pyi?$'
 exclude = '''
 
@@ -86,8 +86,6 @@ exclude = '''
 
 [tool.isort]
 profile = "black"
-known_first_party = ["getpaid_payu"]
-known_third_party = ["django", "django_fsm", "factory", "getpaid", "orders", "paywall", "pendulum", "pytest", "pytest_factoryboy", "requests", "swapper", "typing_extensions"]
 
 [tool.poetry-version-plugin]
 source = "init"

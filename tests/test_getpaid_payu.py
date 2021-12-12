@@ -39,7 +39,9 @@ def test_post_flow_begin(payment_factory, settings, requests_mock, getpaid_clien
     requests_mock.post(
         "/api/v2_1/orders",
         json={
-            "status": {"statusCode": "SUCCESS",},
+            "status": {
+                "statusCode": "SUCCESS",
+            },
             "redirectUri": "https://paywall.example.com/url",
             "orderId": "WZHF5FFDRJ140731GUEST000P01",
             "extOrderId": my_order_id,
@@ -63,7 +65,9 @@ def test_rest_flow_begin(
     requests_mock.post(
         "/api/v2_1/orders",
         json={
-            "status": {"statusCode": "SUCCESS",},
+            "status": {
+                "statusCode": "SUCCESS",
+            },
             "redirectUri": "https://paywall.example.com/url",
             "orderId": "WZHF5FFDRJ140731GUEST000P01",
             "extOrderId": my_order_id,
@@ -174,7 +178,9 @@ def test_push_flow(
                     "lastName": "Doe",
                     "language": "en",
                 },
-                "payMethod": {"type": "PBL",},
+                "payMethod": {
+                    "type": "PBL",
+                },
                 "products": [
                     {
                         "name": "Product 1",
