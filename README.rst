@@ -1,3 +1,7 @@
+.. image:: https://github.com/django-getpaid/django-getpaid-payu/actions/workflows/run_tox.yml/badge.svg
+    :target: https://github.com/django-getpaid/django-getpaid-payu/actions/
+
+
 ===================
 django-getpaid-payu
 ===================

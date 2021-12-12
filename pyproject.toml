@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-getpaid-payu"
-version = "0.2.1"
+version = "0"  # placeholder, version governed by plugin
 description = "Django-GetPaid plugin for PayU service."
 authors = ["Dominik Kozaczko <dominik@kozaczko.info>"]
 license = "MIT"
@@ -12,34 +12,52 @@ packages = [
 
 
 [tool.poetry.dependencies]
-python = "^3.6"
-django-getpaid = "^2.1.0"
-requests = "^2.23.0"
+python = "^3.7"
+django-getpaid = "^2.3.0"
 swapper = "^1.1.2"
-typing-extensions = "^3.7.4"
+typing-extensions = "^3.10.0"
+pytest = { version = "^6.2.4", optional = true }
+codecov = { version = "^2.1.11", optional = true }
+coverage = { version = "^5.5", optional = true }
+requests = { version = "^2.25.1", optional = true }
+requests-mock = { version = "^1.9.3", optional = true }
+pytest-cov = { version = "^2.12.1", optional = true }
+pytest-django = { version = "^4.4.0", optional = true }
+pytest-factoryboy = { version = "^2.1.0", optional = true }
 
 
-[tool.poetry.dev-dependencies]
-pre-commit = "^2.1.1"
-factory-boy = "^2.12.0"
-black = "^19.10b0"
-tox = "^3.14.5"
-ipdb = "^0.13.2"
-pytest = {version = "^5.3.5", optional = true}
-codecov = {version = "^2.0.16", optional = true}
-coverage = {version = "^5.0.3", optional = true}
-requests-mock = {version = "^1.7.0", optional = true}
-pytest-cov = {version = "^2.8.1", optional = true}
-pytest-django = {version = "^3.8.0", optional = true}
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^2.16.0"
+factory-boy = "^3.2.1"
+black = "^21.12-beta.0"
+tox = "^3.24.4"
+ipdb = "^0.13.9"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^6.2.4"
+codecov = "^2.1.11"
+coverage = "^5.5"
+requests = "^2.25.1"
+requests-mock = "^1.9.3"
+pytest-cov = "^2.12.1"
+pytest-django = "^4.4.0"
 
 
 [tool.poetry.extras]
-test = ["pytest", "codecov", "coverage", "request-mock", "pytest-cov", "pytest-django"]
-
+test = [
+    "pytest",
+    "codecov",
+    "coverage",
+    "requests",
+    "requests-mock",
+    "pytest-cov",
+    "pytest-django",
+    "pytest-factoryboy"
+]
 
 [tool.black]
 line-length = 88
-target-version = ['py36']
+target-version = ['py37']
 include = '\.pyi?$'
 exclude = '''
 
@@ -67,13 +85,13 @@ exclude = '''
 
 
 [tool.isort]
-multi_line_output = 3
-include_trailing_comma = true
-line_length = 88
+profile = "black"
 known_first_party = ["getpaid_payu"]
 known_third_party = ["django", "django_fsm", "factory", "getpaid", "orders", "paywall", "pendulum", "pytest", "pytest_factoryboy", "requests", "swapper", "typing_extensions"]
 
+[tool.poetry-version-plugin]
+source = "init"
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core>=1.1.0a6"]
+build-backend = "poetry.core.masonry.api"

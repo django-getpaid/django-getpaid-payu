@@ -9,7 +9,7 @@ from .processor import PaymentProcessor
 
 class CallbackView(View):
     """
-    Dedicated callback view, since payNow does not support dynamic callback urls.
+    Dedicated callback view, since payU does not support dynamic callback urls.
     """
 
     def post(self, request, *args, **kwargs):
